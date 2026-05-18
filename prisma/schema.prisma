@@ -1,0 +1,333 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(PRODUCAO)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  producoes   Producao[]
+  vendas      Venda[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Fornecedor {
+  id        String   @id @default(cuid())
+  nome      String
+  contato   String?
+  telefone  String?
+  email     String?
+  endereco  String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredientes Ingrediente[]
+  compras      CompraIngrediente[]
+
+  @@map("fornecedores")
+}
+
+model Ingrediente {
+  id              String   @id @default(cuid())
+  nome            String
+  categoria       String
+  unidade         String   // g, kg, ml, L, unidade
+  estoqueAtual    Float    @default(0)
+  estoqueMinimo   Float    @default(0)
+  custoMedio      Float    @default(0)
+  fornecedorId    String?
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fornecedor       Fornecedor?          @relation(fields: [fornecedorId], references: [id])
+  compras          CompraIngrediente[]
+  receitaItems     ReceitaIngrediente[]
+  movimentacoes    MovimentacaoEstoque[]
+
+  @@map("ingredientes")
+}
+
+model CompraIngrediente {
+  id            String   @id @default(cuid())
+  ingredienteId String
+  fornecedorId  String?
+  quantidade    Float
+  unidade       String
+  precoTotal    Float
+  precoPorUnidade Float
+  dataCompra    DateTime @default(now())
+  dataValidade  DateTime?
+  notaFiscal    String?
+  observacoes   String?
+  createdAt     DateTime @default(now())
+
+  ingrediente Ingrediente  @relation(fields: [ingredienteId], references: [id])
+  fornecedor  Fornecedor?  @relation(fields: [fornecedorId], references: [id])
+
+  @@map("compras_ingredientes")
+}
+
+model Receita {
+  id              String   @id @default(cuid())
+  nome            String
+  descricao       String?
+  pesoFinal       Float    // em gramas
+  quantidadePorcoes Int
+  tempoPreparo    Int      // em minutos
+  custoTotal      Float    @default(0)
+  custoPorUnidade Float    @default(0)
+  precoVenda      Float    @default(0)
+  margemLucro     Float    @default(0)
+  ativa           Boolean  @default(true)
+  observacoes     String?
+  versao          Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ingredientes ReceitaIngrediente[]
+  producoes    Producao[]
+  vendaItens   VendaItem[]
+
+  @@map("receitas")
+}
+
+model ReceitaIngrediente {
+  id            String @id @default(cuid())
+  receitaId     String
+  ingredienteId String
+  quantidade    Float
+  unidade       String
+
+  receita     Receita     @relation(fields: [receitaId], references: [id], onDelete: Cascade)
+  ingrediente Ingrediente @relation(fields: [ingredienteId], references: [id])
+
+  @@map("receitas_ingredientes")
+}
+
+model Producao {
+  id              String   @id @default(cuid())
+  receitaId       String
+  lote            String   @unique
+  quantidadeProduzida Int
+  dataProducao    DateTime @default(now())
+  dataValidade    DateTime
+  custoProducao   Float
+  responsavelId   String?
+  observacoes     String?
+  status          StatusProducao @default(ATIVO)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  receita     Receita  @relation(fields: [receitaId], references: [id])
+  responsavel User?    @relation(fields: [responsavelId], references: [id])
+  estoque     EstoqueProduto[]
+  movimentacoes MovimentacaoEstoque[]
+
+  @@map("producoes")
+}
+
+model EstoqueProduto {
+  id          String   @id @default(cuid())
+  producaoId  String
+  receitaId   String
+  lote        String
+  quantidade  Int
+  dataValidade DateTime
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  producao Producao @relation(fields: [producaoId], references: [id])
+
+  @@map("estoque_produtos")
+}
+
+model MovimentacaoEstoque {
+  id            String   @id @default(cuid())
+  tipo          TipoMovimentacao
+  ingredienteId String?
+  producaoId    String?
+  quantidade    Float
+  unidade       String
+  motivo        String?
+  referenciaId  String?  // ID da venda, produção, etc
+  createdAt     DateTime @default(now())
+
+  ingrediente Ingrediente? @relation(fields: [ingredienteId], references: [id])
+  producao    Producao?    @relation(fields: [producaoId], references: [id])
+
+  @@map("movimentacoes_estoque")
+}
+
+model Cliente {
+  id        String   @id @default(cuid())
+  nome      String
+  telefone  String?
+  email     String?
+  endereco  String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendas Venda[]
+
+  @@map("clientes")
+}
+
+model Venda {
+  id              String   @id @default(cuid())
+  clienteId       String?
+  vendedorId      String?
+  status          StatusVenda @default(ABERTA)
+  formaPagamento  FormaPagamento?
+  subtotal        Float    @default(0)
+  desconto        Float    @default(0)
+  total           Float    @default(0)
+  observacoes     String?
+  dataVenda       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cliente   Cliente? @relation(fields: [clienteId], references: [id])
+  vendedor  User?    @relation(fields: [vendedorId], references: [id])
+  itens     VendaItem[]
+  financeiro LancamentoFinanceiro[]
+
+  @@map("vendas")
+}
+
+model VendaItem {
+  id          String @id @default(cuid())
+  vendaId     String
+  receitaId   String
+  quantidade  Int
+  precoUnitario Float
+  subtotal    Float
+
+  venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  receita Receita @relation(fields: [receitaId], references: [id])
+
+  @@map("venda_itens")
+}
+
+model CategoriaFinanceiro {
+  id        String   @id @default(cuid())
+  nome      String
+  tipo      TipoLancamento
+  icone     String?
+  cor       String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  lancamentos LancamentoFinanceiro[]
+
+  @@map("categorias_financeiro")
+}
+
+model LancamentoFinanceiro {
+  id          String   @id @default(cuid())
+  tipo        TipoLancamento
+  categoriaId String?
+  descricao   String
+  valor       Float
+  data        DateTime @default(now())
+  vendaId     String?
+  pago        Boolean  @default(true)
+  observacoes String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoria CategoriaFinanceiro? @relation(fields: [categoriaId], references: [id])
+  venda     Venda?               @relation(fields: [vendaId], references: [id])
+
+  @@map("lancamentos_financeiros")
+}
+
+enum Role {
+  ADMIN
+  PRODUCAO
+  FINANCEIRO
+  VENDAS
+}
+
+enum StatusProducao {
+  ATIVO
+  VENCIDO
+  DESCARTADO
+}
+
+enum StatusVenda {
+  ABERTA
+  FECHADA
+  CANCELADA
+}
+
+enum FormaPagamento {
+  PIX
+  CREDITO
+  DEBITO
+  DINHEIRO
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  AJUSTE
+  PERDA
+}
+
+enum TipoLancamento {
+  RECEITA
+  DESPESA
+}
